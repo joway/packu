@@ -1,0 +1,7 @@
+apiVersion: packu.io/v1
+kind: Pack
+metadata:
+  name: example-pack
+spec:
+  # Add fields here
+  size: 3
