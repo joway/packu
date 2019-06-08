@@ -1,0 +1,113 @@
+apiVersion: packu.io/v1
+kind: PackTemplate
+metadata:
+  name: basic
+  namespace: default
+  annotations:
+    packu/version: '1'
+spec:
+  deployment:
+    metadata:
+      name: {metadata.name}
+      labels: {spec.deployment.spec.template.metadata.labels}
+    spec:
+      strategy:
+        rollingUpdate:
+          maxSurge: 25%
+          maxUnavailable: 0
+        type: RollingUpdate
+      selector: {spec.deployment.spec.template.metadata.labels}
+      template:
+        spec:
+          containers:
+            - name: {metadata.name}
+              imagePullPolicy: IfNotPresent
+  service:
+    metadata:
+      name: {metadata.name}
+    spec:
+      sessionAffinity: None
+      type: ClusterIP
+  hpa:
+    metadata:
+      name: {metadata.name}
+    spec:
+      maxReplicas: 10
+      minReplicas: 3
+      scaleTargetRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: {metadata.name}
+      targetCPUUtilizationPercentage: 80
+---
+apiVersion: packu.io/v1
+kind: PackTemplate
+metadata:
+  name: nodejs
+  namespace: default
+  annotations:
+    packu/version: '1'
+spec:
+  deployment:
+    spec:
+      template:
+        spec:
+          containers:
+            - command:
+                - npm
+              args:
+                - run start
+              livenessProbe:
+                failureThreshold: 3
+                httpGet:
+                  path: /health
+                  port: 80
+                  scheme: HTTP
+                periodSeconds: 10
+                successThreshold: 1
+                timeoutSeconds: 1
+              readinessProbe:
+                failureThreshold: 3
+                httpGet:
+                  path: /health
+                  port: 80
+                  scheme: HTTP
+                periodSeconds: 10
+                successThreshold: 1
+                timeoutSeconds: 1
+---
+apiVersion: packu.io/v1
+kind: Pack
+metadata:
+  name: example-service
+  namespace: default
+  labels:
+  annotations:
+spec:
+  extends:
+    - basic
+    - nodejs
+  deployment:
+    spec:
+      replicas: 1
+      template:
+        metadata:
+          labels:
+            app: example-service
+        spec:
+          containers:
+            - image: nginx:latest
+              ports:
+                - containerPort: 80
+                  name: http
+                  protocol: TCP
+              # delete readinessProbe
+              readinessProbe: null
+  service:
+    spec:
+      ports:
+        - name: http
+          port: 80
+          protocol: TCP
+          targetPort: 80
+    selector: {spec.deployment.spec.template.metadata.labels}
